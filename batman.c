@@ -90,7 +90,8 @@ int readRoutingTable(struct in_addr peers[],int *peer_count,int peer_max){
       if (debug&DEBUG_PEERS) DEBUGF("Adding broadcast address %08lx",d);
     }
     
-    if (*peer_count<peer_max)	peers[(*peer_count)++].s_addr=d;
+    if (*peer_count<peer_max)	peers[(*peer_count)++]
+.s_addr=d;
     if (debug&DEBUG_PEERS) DEBUGF("Found peer %08lx from routing table",d);
   }
   fclose(fp);

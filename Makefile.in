@@ -2,6 +2,7 @@ SRCS=	\
 	audiodevices.c \
 	audio_reflector.c \
 	batman.c \
+	broadcastfilter.c \
 	ciphers.c \
 	cli.c \
 	client.c \

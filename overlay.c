@@ -178,6 +178,9 @@ schedule(&_sched_##X); }
     SCHEDULE(fd_periodicstats, 3000, 500);
   }
 
+  /* Work around broadcast receive filters on certain phones */
+  overlay_poke_arp_peers();
+
 #undef SCHEDULE
   
   while(1) {
