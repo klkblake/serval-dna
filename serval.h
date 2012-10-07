@@ -188,7 +188,6 @@ extern char *instrumentation_file;
 extern char *batman_socket;
 extern char *batman_peerfile;
 
-
 struct subscriber;
 
 typedef struct keypair {
@@ -417,6 +416,18 @@ typedef struct overlay_peer {
 
 extern overlay_peer overlay_peers[OVERLAY_MAX_PEERS];
 
+struct outgoing_packet{
+  overlay_interface *interface;
+  int i;
+  int unicast;
+  struct sockaddr_in dest;
+  struct overlay_buffer *buffer;
+};
+int overlay_broadcast_ensemble(int interface_number,
+			       struct sockaddr_in *recipientaddr,
+			       unsigned char *bytes,int len);
+void overlay_init_packet(struct outgoing_packet *packet, 
+			 overlay_interface *interface, int tick);
 
 typedef struct overlay_txqueue {
   struct overlay_frame *first;
@@ -932,7 +943,6 @@ void dump_stack();
 #define OUT() fd_func_exit(&_this_call);
 #define RETURN(X) { OUT() return(X); }
 #define RETURNNULL { OUT() return(NULL); }
-
 
 
 int olsr_init_socket(void);

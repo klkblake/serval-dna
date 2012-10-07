@@ -55,14 +55,6 @@ struct sched_ent sock_any;
 struct sockaddr_in sock_any_addr;
 struct profile_total sock_any_stats;
 
-struct outgoing_packet{
-  overlay_interface *interface;
-  int i;
-  int unicast;
-  struct sockaddr_in dest;
-  struct overlay_buffer *buffer;
-};
-
 struct sched_ent next_packet;
 struct profile_total send_packet;
 
@@ -689,7 +681,7 @@ void overlay_dummy_poll(struct sched_ent *alarm)
   return ;
 }
 
-static int
+int
 overlay_broadcast_ensemble(int interface_number,
 			   struct sockaddr_in *recipientaddr,
 			   unsigned char *bytes,int len)
@@ -989,7 +981,7 @@ overlay_queue_dump(overlay_txqueue *q)
 }
 #endif // 0
 
-static void
+void
 overlay_init_packet(struct outgoing_packet *packet, overlay_interface *interface, int tick){
   packet->interface = interface;
   packet->i = (interface - overlay_interfaces);

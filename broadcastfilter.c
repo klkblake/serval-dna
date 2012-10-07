@@ -54,6 +54,31 @@ void overlay_poke_arp_peers()
 
   DEBUGF("Discovered %d peers by ARP.",peer_count);
 
+  /* Now send rhizome advertisements to them */
+
+  // initialise the packet buffer
+  struct outgoing_packet packet;
+  bzero(&packet, sizeof(struct outgoing_packet));
+  /* Interface doesn't really matter, so just lie that we are using one */
+  overlay_init_packet(&packet, &overlay_interfaces[0], 1);
+    
+  /* Stuff more payloads from queues and send it */
+  overlay_rhizome_add_advertisements(packet.i,packet.buffer);
+
+  int i;
+  for(i=0;i<peer_count;i++)
+    {
+      struct sockaddr_in addr;
+      addr.sin_family=AF_INET;
+      addr.sin_port=htons(PORT_DNA);
+      addr.sin_addr=peers[i];
+      overlay_broadcast_ensemble(packet.i,&addr,packet.buffer->bytes,
+				 packet.buffer->position);
+    }
+  ob_free(packet.buffer);
+  overlay_address_clear();
+
+  /* Schedule ourselves to run periodically */
   bzero(&alarm,sizeof(alarm));
   alarm.alarm =  gettime_ms()+ 1000;
   alarm.deadline = gettime_ms()+ 1000;
