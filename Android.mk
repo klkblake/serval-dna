@@ -2,6 +2,7 @@
 
 SERVALD_SRC_FILES = \
         serval-dna/main.c \
+	serval-dna/broadcastfilter.c \
 	serval-dna/overlay_advertise.c \
 	serval-dna/overlay_buffer.c        \
 	serval-dna/overlay_interface.c     \
