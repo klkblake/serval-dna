@@ -30,6 +30,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "strbuf.h"
 #include "strlcpy.h"
 #include "overlay_address.h"
+#include "crypto_hash_sha512.h"
 
 /*
  Typical call state lifecycle between 2 parties.
@@ -52,8 +53,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
       // this might be a replay attack
       < NOCALL + codecs
   // Ok, we have a network path, lets try to establish the call
+  $ AUTHTOKEN [token] [authtoken]
   $ CODECS [token] [their supported codec list]
   > RINGOUT
+      $ AUTHTOKEN [token] [authtoken]
       $ CODECS [token] [their supported codec list]
       // (Note that if both parties are trying to dial each other, 
       // the call should jump straight to INCALL)
@@ -359,6 +362,29 @@ static int vomp_generate_session_id()
   return session_id;
 }
 
+static char *generate_authtoken(char authtoken[crypto_hash_sha512_BYTES], struct vomp_call_state *call) {
+  char buf[crypto_box_curve25519xsalsa20poly1305_BEFORENMBYTES + 2*sizeof(int)];
+  int *first = (int *) (buf + crypto_box_curve25519xsalsa20poly1305_BEFORENMBYTES);
+  int *second = first + 1;
+  char *nm = keyring_get_nm_bytes(call->local.subscriber->sid, call->remote.subscriber->sid);
+  if (!nm) {
+	  return WHYNULL("could not compute Curve25519(NxM)");
+  }
+  bcopy(nm, buf, crypto_box_curve25519xsalsa20poly1305_BEFORENMBYTES);
+  if (call->initiated_call) {
+	*first = call->local.session;
+	*second = call->remote.session;
+  } else {
+	*first = call->remote.session;
+	*second = call->local.session;
+  }
+  crypto_hash_sha512(authtoken, buf, sizeof(buf));
+  return authtoken;
+}
+
+#define alloca_generate_authtoken(call) generate_authtoken(alloca(crypto_hash_sha512_BYTES), (call))
+#define alloca_tohex_authtoken(authtoken) alloca_tohex((authtoken), crypto_hash_sha512_BYTES)
+
 static struct vomp_call_state *vomp_create_call(struct subscriber *remote,
 				  struct subscriber *local,
 				  unsigned int remote_session,
@@ -617,6 +643,8 @@ static int vomp_update_local_state(struct vomp_call_state *call, int new_state){
     return 0;
   
   if (new_state > VOMP_STATE_CALLPREP && new_state <= VOMP_STATE_INCALL && call->local.state<=VOMP_STATE_CALLPREP){
+	monitor_tell_formatted(MONITOR_VOMP, "\nAUTHTOKEN:%06x:%s\n", call->local.session,
+			alloca_tohex_authtoken(alloca_generate_authtoken(call)));
     // tell clients about the remote codec list 
     int i;
     unsigned char our_codecs[CODEC_FLAGS_LENGTH];
@@ -637,8 +665,8 @@ static int vomp_update_local_state(struct vomp_call_state *call, int new_state){
   switch(new_state){
     case VOMP_STATE_CALLPREP:
       // tell client our session id.
-      monitor_tell_formatted(MONITOR_VOMP, "\nCALLTO:%06x:%s:%s:%s:%s\n", 
-			     call->local.session, 
+      monitor_tell_formatted(MONITOR_VOMP, "\nCALLTO:%06x:%s:%s:%s:%s\n",
+			     call->local.session,
 			     alloca_tohex_sid(call->local.subscriber->sid), call->local.did,
 			     alloca_tohex_sid(call->remote.subscriber->sid), call->remote.did);
       break;
@@ -658,8 +686,8 @@ static int vomp_update_remote_state(struct vomp_call_state *call, int new_state)
   
   switch(new_state){
     case VOMP_STATE_RINGINGOUT:
-      monitor_tell_formatted(MONITOR_VOMP, "\nCALLFROM:%06x:%s:%s:%s:%s\n", 
-			     call->local.session, 
+      monitor_tell_formatted(MONITOR_VOMP, "\nCALLFROM:%06x:%s:%s:%s:%s\n",
+			     call->local.session,
 			     alloca_tohex_sid(call->local.subscriber->sid), call->local.did,
 			     alloca_tohex_sid(call->remote.subscriber->sid), call->remote.did);
       break;
