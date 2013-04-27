@@ -681,6 +681,8 @@ int vomp_dial(struct subscriber *local, struct subscriber *remote, const char *l
 int vomp_pickup(struct vomp_call_state *call);
 int vomp_hangup(struct vomp_call_state *call);
 int vomp_ringing(struct vomp_call_state *call);
+int vomp_auth_start(struct vomp_call_state *call);
+int vomp_auth_next(struct vomp_call_state *call);
 int vomp_received_audio(struct vomp_call_state *call, int audio_codec, int time, int sequence,
 			const unsigned char *audio, int audio_length);
 void monitor_get_all_supported_codecs(unsigned char *codecs);

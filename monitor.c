@@ -542,6 +542,26 @@ static int monitor_call_dtmf(const struct cli_parsed *parsed, void *context)
   return 0;
 }
 
+static int monitor_auth_start(const struct cli_parsed *parsed, void *context)
+{
+  struct monitor_context *c=context;
+  struct vomp_call_state *call=vomp_find_call_by_session(strtol(parsed->args[1],NULL,16));
+  if (!call)
+    return monitor_write_error(c,"Invalid call token");
+  vomp_auth_start(call);
+  return 0;
+}
+
+static int monitor_auth_next(const struct cli_parsed *parsed, void *context)
+{
+  struct monitor_context *c=context;
+  struct vomp_call_state *call=vomp_find_call_by_session(strtol(parsed->args[1],NULL,16));
+  if (!call)
+    return monitor_write_error(c,"Invalid call token");
+  vomp_auth_next(call);
+  return 0;
+}
+
 static int monitor_help(const struct cli_parsed *parsed, void *context);
 
 struct cli_schema monitor_commands[] = {
@@ -556,6 +576,8 @@ struct cli_schema monitor_commands[] = {
   {monitor_call_audio,{"audio","<token>","<type>","[<time>]","[<sequence>]",NULL},0,""},
   {monitor_call_hangup, {"hangup","<token>",NULL},0,""},
   {monitor_call_dtmf, {"dtmf","<token>","<digits>",NULL},0,""},
+  {monitor_auth_start, {"authstart","<token>",NULL},0,""},
+  {monitor_auth_next, {"authnext","<token>",NULL},0,""},
   {NULL},
 };
 

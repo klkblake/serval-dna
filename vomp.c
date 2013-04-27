@@ -81,6 +81,12 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
   Tell any clients that the call hasn't timed out yet
   (if servald is behaving this should be redundant, if it isn't behaving how do we hangup?)
   $ KEEPALIVE [token]
+
+  Perform voice auth
+  # AUTHSTART [token]
+  Repeat as necessary:
+  # AUTHNEXT [token]
+  $ AUTHRAND [token] [random]
  
   Hanging up (may also be triggered on network or call establishment timeout)
   # HANGUP [token]
@@ -175,6 +181,7 @@ struct vomp_call_state {
   time_ms_t last_activity;
   time_ms_t audio_clock;
   int remote_audio_clock;
+  int auth_index;
   
   // last local & remote status we sent to all interested parties
   int last_sent_status;
@@ -362,28 +369,30 @@ static int vomp_generate_session_id()
   return session_id;
 }
 
-static char *generate_authtoken(char authtoken[crypto_hash_sha512_BYTES], struct vomp_call_state *call) {
-  char buf[crypto_box_curve25519xsalsa20poly1305_BEFORENMBYTES + 2*sizeof(int)];
-  int *first = (int *) (buf + crypto_box_curve25519xsalsa20poly1305_BEFORENMBYTES);
-  int *second = first + 1;
-  char *nm = keyring_get_nm_bytes(call->local.subscriber->sid, call->remote.subscriber->sid);
-  if (!nm) {
+// We assume that crypto_box_curve25519xsalsa20poly1305_BEFORENMBYTES == crypto_stream_xsalsa20_KEYBYTES
+// Note that we only use 4 + 4 + 4 = 12 bytes of the 24 byte nonce; optimally
+// we should have 64 bit session ids.
+#define AUTHRAND_BYTES 8
+static unsigned char *generate_authrand(unsigned char authrand[AUTHRAND_BYTES], struct vomp_call_state *call) {
+  int nonce[crypto_stream_xsalsa20_NONCEBYTES / sizeof(int)];
+  unsigned char *key = keyring_get_nm_bytes(call->local.subscriber->sid, call->remote.subscriber->sid);
+  if (!key) {
 	  return WHYNULL("could not compute Curve25519(NxM)");
   }
-  bcopy(nm, buf, crypto_box_curve25519xsalsa20poly1305_BEFORENMBYTES);
   if (call->initiated_call) {
-	*first = call->local.session;
-	*second = call->remote.session;
+	nonce[0] = call->local.session;
+	nonce[1] = call->remote.session;
   } else {
-	*first = call->remote.session;
-	*second = call->local.session;
+	nonce[0] = call->remote.session;
+	nonce[1] = call->local.session;
   }
-  crypto_hash_sha512(authtoken, buf, sizeof(buf));
-  return authtoken;
+  nonce[2] = call->auth_index++;
+  crypto_stream_xsalsa20(authrand, AUTHRAND_BYTES, (unsigned char *) nonce, key);
+  return authrand;
 }
 
-#define alloca_generate_authtoken(call) generate_authtoken(alloca(crypto_hash_sha512_BYTES), (call))
-#define alloca_tohex_authtoken(authtoken) alloca_tohex((authtoken), crypto_hash_sha512_BYTES)
+#define alloca_generate_authrand(call) generate_authrand(alloca(AUTHRAND_BYTES), (call))
+#define alloca_tohex_authrand(authrand) alloca_tohex((authrand), AUTHRAND_BYTES)
 
 static struct vomp_call_state *vomp_create_call(struct subscriber *remote,
 				  struct subscriber *local,
@@ -643,8 +652,6 @@ static int vomp_update_local_state(struct vomp_call_state *call, int new_state){
     return 0;
   
   if (new_state > VOMP_STATE_CALLPREP && new_state <= VOMP_STATE_INCALL && call->local.state<=VOMP_STATE_CALLPREP){
-	monitor_tell_formatted(MONITOR_VOMP, "\nAUTHTOKEN:%06x:%s\n", call->local.session,
-			alloca_tohex_authtoken(alloca_generate_authtoken(call)));
     // tell clients about the remote codec list 
     int i;
     unsigned char our_codecs[CODEC_FLAGS_LENGTH];
@@ -868,6 +875,28 @@ int vomp_hangup(struct vomp_call_state *call)
       DEBUG("Hanging up");
     vomp_update_local_state(call, VOMP_STATE_CALLENDED);
     vomp_update(call);
+  }
+  return 0;
+}
+
+int vomp_auth_start(struct vomp_call_state *call)
+{
+  if (call){
+    if (config.debug.vomp)
+      DEBUG("Starting authentication");
+    call->auth_index = 0;
+  }
+  return 0;
+}
+
+int vomp_auth_next(struct vomp_call_state *call)
+{
+  if (call){
+    if (config.debug.vomp)
+      DEBUG("Generating new authrand");
+    monitor_tell_formatted(MONITOR_VOMP, "\nAUTHRAND:%06x:%s\n",
+		    call->local.session,
+		    alloca_tohex_authrand(alloca_generate_authrand(call)));
   }
   return 0;
 }
